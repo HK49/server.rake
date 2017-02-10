@@ -15,7 +15,7 @@ namespace :guard do
     o.on("-d", "--debug", "Guard will display debug information") {
       arg[:d] = "--debug"
     } # there are more modes in guard, just didn't include 'em
-    o.on("-t", "--trace", "Runs rake task with trace") { 
+    o.on("--trace", "Runs rake task with trace") { 
       Rails.logger.level = Logger::DEBUG
     } # trace rake task
     o.on("-h", "--help", "Prints this help") { 
