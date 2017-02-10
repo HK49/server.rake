@@ -9,7 +9,8 @@
    invokes Guard  
    if exited by Ctrl+C doesn't show all stack trace because of trap on INT signal  
    can be launched with options like so:  
- - `rake guard:start -- -h` will show all available options and exit task   
+ - `rake guard:start -- -h` will show all available options and exit task  
+ - `rake --trace guard -- -h` to run the above but with trace
 2. `rake guard:restart` restarts guard, puma and postgres (don't see any actual usage for this)  
 3. `rake guard` is shortcut for `rake guard:start`. can also be called with options in the same way.
 
