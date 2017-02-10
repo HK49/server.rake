@@ -7,13 +7,13 @@ namespace :guard do
     o.banner = "Usage: rake [task] -- [options]"
     # options can be given even from parent task(what if two child tasks with same opts?)
     o.on("-c", "--clear", "The shell will be cleared after each change") { 
-      arg[:mode] = "--clear"
+      arg[:c] = "--clear"
     }
     o.on("-n f", "--notify false", "System notifications will be disabled") {
-      arg[:mode] = "--notify false"
+      arg[:nf] = "--notify false"
     }
     o.on("-d", "--debug", "Guard will display debug information") {
-      arg[:mode] = "--debug"
+      arg[:d] = "--debug"
     } # there are more modes in guard, just didn't include 'em
     o.on("-h", "--help", "Prints this help") { 
       puts o
@@ -30,7 +30,7 @@ namespace :guard do
     begin
       Rake::Task['puma:kill'].execute unless Rake.application.top_level_tasks.join(', ').include?('puma')
       Rake::Task['psql:start'].invoke
-      arg[:mode] ? sh("bundle exec guard #{arg[:mode]}") : system("bundle exec guard")
+      arg[:mode] ? sh("bundle exec guard #{arg.values.join(' ')}") : system("bundle exec guard")
     rescue StandardError => error
       error.each { |e|
         printf(
