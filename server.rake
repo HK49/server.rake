@@ -1,7 +1,7 @@
 namespace :guard do
   
   desc 'Starts guard *with* puma server'
-  task :start do # puma:start is almost the same - should simplify
+  task :start => :environment do # puma:start is almost the same - should simplify
     arg = {} # Hash.new
     o = OptionParser.new # can call task with options, see below:
     o.banner = "Usage: rake [task] -- [options]"
@@ -15,6 +15,9 @@ namespace :guard do
     o.on("-d", "--debug", "Guard will display debug information") {
       arg[:d] = "--debug"
     } # there are more modes in guard, just didn't include 'em
+    o.on("-t", "--trace", "Runs rake task with trace") { 
+      Rails.logger.level = Logger::DEBUG
+    } # trace rake task
     o.on("-h", "--help", "Prints this help") { 
       puts o
       exit(0)
