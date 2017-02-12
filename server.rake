@@ -109,17 +109,25 @@ namespace :puma do
   
   desc 'Nukes tcp. Port should be defined in taskfile'
   task :overkill do # all processes on #{puma_port} will be killed
-    `lsof -i TCP:#{puma_port} -t`&.split("\n").to_a.each { |i| system("kill -9 #{i}") }
-  end
+    `lsof -i TCP:#{puma_port} -t`.split("\n").each { |i| system("kill -9 #{i}") }
+  end # seems like it needs to be executed twice. 'cause sometimes on first run array has only one value
 end
 
 desc 'Starts postgresql service *and* puma server'
 task :puma do
   Rake::Task['psql:start'].execute # Prevent PG::ConnectionBad
   Rake::Task['puma:kill'].execute # Prevent Errno::EADDRINUSE - Address already in use
-  # Rake::Task['guard:start'].execute if ARGV.include?("--") # skip IO. modes are only in guard
   STDOUT.puts "Do you want to guard puma server?(\e[42my\e[0m/\e[41mn\e[0m)\n"
-  /Y/ =~ STDIN.gets.chomp.upcase ? Rake::Task['guard'].invoke : Rake::Task['puma:start'].execute
+  input = ""
+  begin
+    Timeout.timeout(15) do
+      input = STDIN.gets.chomp.upcase
+      puts "Rake: Starting puma server with guard..."
+    end
+  rescue Timeout::Error
+    puts "Rake: Starting puma server without guard..."
+  end
+  /Y/ =~ input ? Rake::Task['guard'].invoke : Rake::Task['puma:start'].execute
 end
 
 namespace :psql do
