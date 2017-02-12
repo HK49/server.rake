@@ -11,7 +11,7 @@ namespace :guard do
   desc 'Starts guard *with* puma server'
   task :start => :environment do
     arg = {}
-    o = OptionParser.new
+    o = OptionParser.new # 'cause namespace:task'[:opt1, :opt2]' is ugly for me
     o.banner = "Usage: rake [task] -- [options]"
     # options can be given even from parent task(what if two child tasks with same opts?)
     o.on("-c", "--clear", "The shell will be cleared after each change") { 
@@ -51,8 +51,8 @@ namespace :guard do
     else
       printf "Rake: 'guard:start' is complited without errors.\n"
     ensure
-      printf("Rake: 'guard:start' ended.\n")
       Rake::Task['puma:kill'].execute
+      printf("Rake: '#{Rake.application.top_level_tasks.join(', ')}' ended.\n")
     end
   end
   
@@ -90,8 +90,8 @@ namespace :puma do
     else
       printf "Rake: 'puma:start' is complited without errors.\n"
     ensure
-      printf "Rake: 'puma:start' ended.\n"
       Rake::Task['puma:kill'].execute
+      printf("Rake: '#{Rake.application.top_level_tasks.join(', ')}' ended.\n")
     end
   end
   
@@ -102,15 +102,21 @@ namespace :puma do
       system("kill -s SIGTERM #{pid}")
       File.delete("#{puma_pidfile}")
     end # puma will be terminated corresponding to pid file
-    `ps aux | grep puma | grep -v grep | awk '{print $2}'`.split("\n").map do |i|
-      system("kill -s SIGTERM #{i}") if `lsof -i TCP:#{puma_port} -t`.split("\n").include?(i)
-    end # each puma process on corresponding port will be terminated
+    2.times {
+      `ps aux | grep puma | grep -v grep | awk '{print $2}'`.split("\n").map do |i|
+        system("kill -s SIGTERM #{i}") if `lsof -i TCP:#{puma_port} -t`.split("\n").include?(i)
+      end # each puma process on corresponding port will be terminated
+      sleep(2)
+    }
   end
   
   desc 'Nukes tcp. Port should be defined in taskfile'
   task :overkill do # all processes on #{puma_port} will be killed
-    `lsof -i TCP:#{puma_port} -t`.split("\n").each { |i| system("kill -9 #{i}") }
-  end # seems like it needs to be executed twice. 'cause sometimes on first run array has only one value
+    2.times {
+      `lsof -i TCP:#{puma_port} -t`.split("\n").each { |i| system("kill -9 #{i}") }
+      sleep(2)
+    } # seems like it needs to be executed twice. 'cause sometimes on first run array has only one value
+  end
 end
 
 desc 'Starts postgresql service *and* puma server'
@@ -152,7 +158,7 @@ namespace :psql do
   task :restart do
     unless psql_on
       begin
-        Timeout.timeout(20) do
+        Timeout.timeout(15) do
           STDOUT.puts "You want to retard inactive server, you sure?(\e[42my\e[0m/\e[41mn\e[0m)\n"
           /Y/ =~ STDIN.gets.chomp.upcase ? 
             system("sudo service postgresql restart")\
