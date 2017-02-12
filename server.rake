@@ -1,9 +1,17 @@
+def puma_pidfile # puma pid file path
+  @puma_pidfile = ENV['PIDFILE'] || "tmp/pids/puma.pid"
+end
+
+def puma_port # port where puma runs
+  @puma_port = ENV['PORT'] || "8080"
+end
+
 namespace :guard do
   
   desc 'Starts guard *with* puma server'
-  task :start => :environment do # puma:start is almost the same - should simplify
-    arg = {} # Hash.new
-    o = OptionParser.new # can call task with options, see below:
+  task :start => :environment do
+    arg = {}
+    o = OptionParser.new
     o.banner = "Usage: rake [task] -- [options]"
     # options can be given even from parent task(what if two child tasks with same opts?)
     o.on("-c", "--clear", "The shell will be cleared after each change") { 
@@ -14,10 +22,10 @@ namespace :guard do
     }
     o.on("-d", "--debug", "Guard will display debug information") {
       arg[:d] = "--debug"
-    } # there are more modes in guard, just didn't include 'em
+    } # there are more modes in guard - add if needed
     o.on("--trace", "Runs rake task with trace") { 
       Rails.logger.level = Logger::DEBUG
-    } # trace rake task
+    }
     o.on("-h", "--help", "Prints this help") { 
       puts o
       exit(0)
@@ -27,6 +35,7 @@ namespace :guard do
     
     trap('INT') {
       puts("\nRake: INT signal, handling inside trap...\n")
+      sleep(5)
       exit(0)
     } # exit task witch ^C
     
@@ -43,10 +52,7 @@ namespace :guard do
       printf "Rake: 'guard:start' is complited without errors.\n"
     ensure
       printf("Rake: 'guard:start' ended.\n")
-      if File.exists?("tmp/pids/puma.pid") # can exclude and just execute 'puma:kill'
-        pid = File.open("tmp/pids/puma.pid", "rb") { |i| i.read(4).to_i }
-        system("kill -s SIGTERM #{pid}")
-      end
+      Rake::Task['puma:kill'].execute
     end
   end
   
@@ -69,8 +75,9 @@ namespace :puma do
   task :start do
     trap('INT') {
       puts("\nRake: INT signal, handling inside trap...\n")
+      sleep(5)
       exit(0)
-    }
+    } # exit task witch ^C
     begin
       system("bundle exec puma")
     rescue StandardError => error
@@ -84,23 +91,25 @@ namespace :puma do
       printf "Rake: 'puma:start' is complited without errors.\n"
     ensure
       printf "Rake: 'puma:start' ended.\n"
-      if File.exists?("tmp/pids/puma.pid") # can exclude and just execute 'puma:kill'
-        pid = File.open("tmp/pids/puma.pid", "rb") { |i| i.read(4).to_i }
-        system("kill -s SIGTERM #{pid}")
-      end
+      Rake::Task['puma:kill'].execute
     end
   end
   
-  desc 'Kills puma on tcp:8080' # port, where puma runs (8080 is standart on C9)
-  task :kill do # each puma process on 8080 port will be terminated
+  desc 'Terminates puma. Port and Pid file path should be defined in taskfile'
+  task :kill do 
+    if File.exists?("#{puma_pidfile}")
+      pid = File.open("#{puma_pidfile}", "rb") { |i| i.read(4).to_i }
+      system("kill -s SIGTERM #{pid}")
+      File.delete("#{puma_pidfile}")
+    end # puma will be terminated corresponding to pid file
     `ps aux | grep puma | grep -v grep | awk '{print $2}'`.split("\n").map do |i|
-      system("kill -s SIGTERM #{i}") if `lsof -i TCP:8080 -t`.split("\n").include?(i)
-    end # still puma has controll servers
+      system("kill -s SIGTERM #{i}") if `lsof -i TCP:#{puma_port} -t`.split("\n").include?(i)
+    end # each puma process on corresponding port will be terminated
   end
   
-  desc 'Nukes tcp:8080'
-  task :overkill do # all processes on 8080 will be killed
-    `lsof -i TCP:8080 -t`&.split("\n").to_a.each { |i| system("kill -9 #{i}") }
+  desc 'Nukes tcp. Port should be defined in taskfile'
+  task :overkill do # all processes on #{puma_port} will be killed
+    `lsof -i TCP:#{puma_port} -t`&.split("\n").to_a.each { |i| system("kill -9 #{i}") }
   end
 end
 
@@ -108,7 +117,8 @@ desc 'Starts postgresql service *and* puma server'
 task :puma do
   Rake::Task['psql:start'].execute # Prevent PG::ConnectionBad
   Rake::Task['puma:kill'].execute # Prevent Errno::EADDRINUSE - Address already in use
-  STDOUT.puts "Do you want to guard puma server?(\e[42my\e[0m/\e[41mn\e[0m)\n" # colors for 'y' & 'n'
+  # Rake::Task['guard:start'].execute if ARGV.include?("--") # skip IO. modes are only in guard
+  STDOUT.puts "Do you want to guard puma server?(\e[42my\e[0m/\e[41mn\e[0m)\n"
   /Y/ =~ STDIN.gets.chomp.upcase ? Rake::Task['guard'].invoke : Rake::Task['puma:start'].execute
 end
 
@@ -132,7 +142,7 @@ namespace :psql do
   
   desc 'Restarts postgresql service'
   task :restart do
-    unless online
+    unless psql_on
       begin
         Timeout.timeout(20) do
           STDOUT.puts "You want to retard inactive server, you sure?(\e[42my\e[0m/\e[41mn\e[0m)\n"
@@ -151,15 +161,15 @@ namespace :psql do
   
   desc 'Stops postgresql service'
   task :stop do
-    system("sudo service postgresql stop") if !!online
+    system("sudo service postgresql stop") if !!psql_on
   end
   
   desc 'Tells postgresql service status'
   task :online? do
-    puts("#{online}")
+    puts("#{psql_on}")
   end
   
-  def online
+  def psql_on
     `service postgresql status`.include?('online') ? true : false
   end
 end
