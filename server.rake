@@ -31,9 +31,7 @@ namespace :guard do
     } # exit task witch ^C
     
     begin
-      Rake::Task['puma:kill'].execute unless Rake.application.top_level_tasks.join(', ').include?('puma')
-      Rake::Task['psql:start'].invoke
-      arg[:mode] ? sh("bundle exec guard #{arg.values.join(' ')}") : system("bundle exec guard")
+      arg.empty? ? system("bundle exec guard") : sh("bundle exec guard #{arg.values.join(' ')}")
     rescue StandardError => error
       error.each { |e|
         printf(
@@ -63,7 +61,7 @@ namespace :guard do
 end
 
 desc 'Starts guard *with* puma server'
-task :guard => 'guard:start'
+task :guard => ['psql:start', 'puma:kill', 'guard:start']
 
 namespace :puma do
   
@@ -74,7 +72,6 @@ namespace :puma do
       exit(0)
     }
     begin
-      Rake::Task['psql:start'].execute
       system("bundle exec puma")
     rescue StandardError => error
       error.each { |e|
@@ -109,8 +106,8 @@ end
 
 desc 'Starts postgresql service *and* puma server'
 task :puma do
+  Rake::Task['psql:start'].execute # Prevent PG::ConnectionBad
   Rake::Task['puma:kill'].execute # Prevent Errno::EADDRINUSE - Address already in use
-  # Rake::Task['guard:start'].execute if ARGV.include?("--") # skip IO. modes are only in guard
   STDOUT.puts "Do you want to guard puma server?(\e[42my\e[0m/\e[41mn\e[0m)\n" # colors for 'y' & 'n'
   /Y/ =~ STDIN.gets.chomp.upcase ? Rake::Task['guard'].invoke : Rake::Task['puma:start'].execute
 end
