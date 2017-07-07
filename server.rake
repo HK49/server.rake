@@ -102,19 +102,29 @@ namespace :puma do
       system("kill -s SIGTERM #{pid}")
       File.delete("#{puma_pidfile}")
     end # puma will be terminated corresponding to pid file
+    n = 0
     2.times {
-      `ps aux | grep puma | grep -v grep | awk '{print $2}'`.split("\n").map do |i|
-        system("kill -s SIGTERM #{i}") if `lsof -i TCP:#{puma_port} -t`.split("\n").include?(i)
+      break if `lsof -i TCP:#{puma_port} -t`.empty?
+      n = n + 1
+      `ps aux | grep puma | grep -v grep | grep -v tail | awk '{print $2}'`.split("\n").map do |i|
+        if `lsof -i TCP:#{puma_port} -t`.split("\n").include?(i)
+          puts("[!] Killing puma with #{i}PID on #{puma_port}PORT...")
+          system("kill -s SIGTERM #{i}")
+        elsif `lsof -i TCP:#{puma_port} -t`.split("\n").include?(i) && !!(n > 1)
+          puts("Rake: puma:kill couldn't kill puma procs on #{puma_port}PORT!\nProceeding with puma:overkill task...")
+          Rake::Task['puma:overkill'].execute
+        end
       end # each puma process on corresponding port will be terminated
-      sleep(2)
+      sleep(1)
     }
+    puts("[#{Process.pid}] * Rake: #{puma_port}PORT is empty.") if n < 1
   end
   
   desc 'Nukes tcp. Port should be defined in taskfile'
   task :overkill do # all processes on #{puma_port} will be killed
     2.times {
       `lsof -i TCP:#{puma_port} -t`.split("\n").each { |i| system("kill -9 #{i}") }
-      sleep(2)
+      sleep(1)
     } # seems like it needs to be executed twice. 'cause sometimes on first run array has only one value
   end
 end
